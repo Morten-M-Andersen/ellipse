@@ -1,0 +1,440 @@
+<!-- Copyright (c) 2025-05-11 (yyyy-MM-dd) Morten Miland Andersen, Aalborg, Denmark -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellipse and PQR Vector with Calculations</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+
+    <style>
+        /* CSS styles define the visual appearance of the page elements. */
+        /* Includes layout for containers, controls, canvas, and info displays. */
+        /* Media queries are used for responsive adjustments on smaller screens. */
+        /* The <details> and <summary> elements are styled for the collapsible section. */
+        body {
+            font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f0f0;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+        .container {
+            background-color: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-top: 20px; width: 95%; max-width: 700px;
+        }
+        .controls, .path-calc-controls, .ellipse-circumference-info {
+             margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 4px;
+        }
+        .controls label, .path-calc-controls label { margin-right: 10px; display: inline-block; min-width: 170px; /* Increased for English labels */ }
+        .controls input[type="range"], .controls input[type="number"],
+        .path-calc-controls input[type="number"], .path-calc-controls button {
+            margin-right: 5px; vertical-align: middle;
+        }
+        .controls input[type="number"] { max-width: 60px; } /* For a and b number inputs */
+        .controls span { display: inline-block; width: 40px; text-align: left; }
+        .info-display, #pathResultSummary, #ellipseCircumferenceResults {
+            margin-top: 10px; padding: 10px; background-color: #e9f5ff;
+            border-radius: 4px; font-size: 0.9em; line-height: 1.6;
+        }
+        #pathResultDetails { 
+            max-height: 200px; overflow-y: auto; border: 1px solid #ddd;
+            padding: 5px; margin-top: 5px; background-color: #f9f9f9;
+        }
+        details > summary { cursor: pointer; font-weight: bold; color: #007bff; }
+        #p5CanvasContainer { width: 100%; height: 400px; 
+             border: 1px solid #ccc; position: relative; overflow: hidden;
+        }
+        canvas { display: block; }
+        h1, h2 { margin-top: 0; color: #333; text-align: center; }
+        h2 { margin-bottom: 10px; font-size: 1.2em;}
+        .control-group { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; /* Allow wrapping */ }
+        .control-group label:first-child { flex-basis: 180px; /* Adjusted for English labels */ flex-shrink: 0; }
+        .control-group input[type="range"] { flex-grow: 1; min-width: 100px; /* Ensure slider has some width */ }
+        .path-calc-controls input[type="number"]{ max-width: 80px;}
+
+        @media (max-width: 600px) {
+            .control-group { flex-direction: column; align-items: flex-start; }
+            .control-group label:first-child { flex-basis: auto; margin-bottom: 5px; }
+            .controls input[type="range"], .controls input[type="number"],
+            .path-calc-controls input[type="number"] { width: calc(100% - 10px); margin-right:0; }
+            .controls span { width: auto; margin-left: 5px;}
+        }
+    </style>
+</head>
+
+<body>
+    <!-- HTML structure defines the user interface layout. -->
+    <!-- It includes sections for visualization controls, ellipse circumference, -->
+    <!-- path length calculation, and display areas for results and the p5.js canvas. -->
+    <div class="container">
+        <h1>Ellipse and PQR Vector</h1>
+        
+        <h2>Visualization Control</h2>
+        <div class="controls">
+            <div class="control-group">
+                <label for="ellipseA">Semi-axis a (horizontal):</label>
+                <input type="range" id="ellipseASlider" min="1" max="200" value="150" oninput="syncInputs('ellipseASlider', 'ellipseANumber'); updateParameters();">
+                <input type="number" id="ellipseANumber" min="1" max="200" value="150" oninput="syncInputs('ellipseANumber', 'ellipseASlider'); updateParameters();">
+                <span id="ellipseAVal">150</span>
+            </div>
+            <div class="control-group">
+                <label for="ellipseB">Semi-axis b (vertical):</label>
+                <input type="range" id="ellipseBSlider" min="1" max="200" value="100" oninput="syncInputs('ellipseBSlider', 'ellipseBNumber'); updateParameters();">
+                <input type="number" id="ellipseBNumber" min="1" max="200" value="100" oninput="syncInputs('ellipseBNumber', 'ellipseBSlider'); updateParameters();">
+                <span id="ellipseBVal">100</span>
+            </div>
+            <div class="control-group">
+                <label for="thetaSlider">Angle θ (QP to Y-axis):</label>
+                <input type="range" id="thetaSlider" min="0" max="360" value="0" step="1" oninput="updateParameters()">
+                <span id="thetaSliderVal">0°</span>
+            </div>
+        </div>
+        <div id="p5CanvasContainer"></div> <!-- p5.js canvas will be injected here -->
+        <div id="infoDisplay" class="info-display">Adjust the parameters.</div>
+
+        <h2>Ellipse Circumference (Approximations)</h2>
+        <div class="ellipse-circumference-info">
+            <div class="control-group">
+                <label for="circumferenceDecimals">Decimal Places for Circum.:</label>
+                <input type="number" id="circumferenceDecimals" value="3" min="0" max="10" oninput="updateParameters()">
+            </div>
+            <div id="ellipseCircumferenceResults">Circumference results will be shown here.</div>
+        </div>
+
+        <h2>Calculate Path Length of P</h2>
+        <div class="path-calc-controls">
+            <div class="control-group">
+                <label for="pathStartTheta">Start Angle (degrees):</label>
+                <input type="number" id="pathStartTheta" value="0" step="1">
+                <span>(uses current θ if empty)</span>
+            </div>
+            <div class="control-group">
+                <label for="pathAngleRange">Angle Range (delta θ):</label>
+                <input type="number" id="pathAngleRange" value="360" step="1">
+            </div>
+            <div class="control-group">
+                <label for="pathNumSteps">Number of Steps:</label>
+                <input type="number" id="pathNumSteps" value="4" min="1">
+            </div>
+            <div class="control-group">
+                <button onclick="triggerPathLengthCalculation()">Calculate Path Length</button>
+            </div>
+        </div>
+        <div id="pathResultSummary">Path calculation summary will be shown here.</div>
+        <details>
+            <summary>Show/Hide Path Calculation Details</summary>
+            <div id="pathResultDetails">Path calculation details will be shown here after calculation.</div>
+        </details>
+    </div>
+
+    <script>
+        // --- Global Variables & Utility Functions ---
+        let p5Instance; // Holds the global p5.js instance, set within sketch().
+        let R_math_vis, Q_math_vis, P_math_vis; // p5.Vector objects for storing MATHEMATICAL coordinates for VISUALIZATION.
+        let L_RQ_vis, L_QP_vis; // Lengths of PQR mechanism segments for VISUALIZATION.
+        let circumferenceDecimalPlaces = 3; // Default decimal places for circumference results. Updated by user input.
+
+        // Synchronizes the values of two input fields (e.g., a slider and a number input).
+        // When one changes, the other is updated to match.
+        function syncInputs(sourceId, targetId) {
+            document.getElementById(targetId).value = document.getElementById(sourceId).value;
+        }
+
+        // Converts mathematical coordinates (origin at center, Y-axis up) to p5.js canvas coordinates.
+        // p5.js has origin at top-left, Y-axis down. After p.translate(), origin is at center, but Y still down.
+        // So, this function inverts the Y-coordinate.
+        function mathToP5(mathVec, p_inst) { 
+            if (!p_inst) { console.error("mathToP5: p_inst (p5 instance) is undefined"); return {x:0, y:0}; } // Safety check
+            return p_inst.createVector(mathVec.x, -mathVec.y); // Invert Y for p5 drawing
+        }
+        
+        // Calculates the mathematical coordinates of points R, Q, and P for a given theta, semi-axes a and b.
+        // R is on Y-axis, Q on X-axis, PQR are collinear. Lengths L_RQ = |a-b|, L_QP = b.
+        // Trigonometry (sin, cos) is used to project these lengths based on theta.
+        // `p_inst` is the p5.js instance needed for trigonometric functions and p5.Vector creation.
+        function calculatePQRForTheta(target_theta_deg, input_a, input_b, p_inst) {
+            if (!p_inst) { console.error("calculatePQRForTheta: p_inst (p5 instance) is undefined"); return {P: {x:0,y:0}, Q: {x:0,y:0}, R: {x:0,y:0}}; } // Safety
+            let target_theta_rad = p_inst.radians(target_theta_deg); // Convert degrees to radians for p5 trig functions
+            let current_L_RQ = Math.abs(input_a - input_b); // Length of segment RQ, based on difference of semi-axes
+            let current_L_QP = input_b; // Length of segment QP, based on semi-axis b (vertical reach of P)
+
+            // R is on Y-axis: (0, -L_RQ*cos(theta)). Negative because R starts on negative Y-axis for theta=0.
+            let R_calc = p_inst.createVector(0, -current_L_RQ * p_inst.cos(target_theta_rad));
+            // Q is on X-axis: (L_RQ*sin(theta), 0).
+            let Q_calc = p_inst.createVector(current_L_RQ * p_inst.sin(target_theta_rad), 0);
+            // P is an extension of QP from Q: P = Q + vector_QP.
+            // Vector_QP has length L_QP and direction defined by theta relative to Y-axis.
+            // Px = Qx + L_QP*sin(theta), Py = Qy + L_QP*cos(theta)
+            let P_calc = p_inst.createVector(
+                Q_calc.x + current_L_QP * p_inst.sin(target_theta_rad),
+                Q_calc.y + current_L_QP * p_inst.cos(target_theta_rad)
+            );
+            return { P: P_calc, Q: Q_calc, R: R_calc }; // Return calculated points as p5.Vector objects
+        }
+
+        // --- P5.js Sketch Definition ---
+        // This function is passed to `new p5()` to create the canvas and handle drawing.
+        // `p` is the local p5.js instance for this sketch.
+        const sketch = (p) => {
+            p5Instance = p; // Assign the local p5 instance to the global variable for access elsewhere.
+            let canvasContainer = document.getElementById('p5CanvasContainer');
+            let currentCanvasWidth = canvasContainer.offsetWidth;
+            let currentCanvasHeight = canvasContainer.offsetHeight;
+
+            // p5.js setup() function: Called once when the program starts.
+            // Initializes canvas, text properties, and initial state of visualization points.
+            p.setup = () => {
+                p.createCanvas(currentCanvasWidth, currentCanvasHeight).parent('p5CanvasContainer');
+                p.textFont('Arial');
+                p.textSize(12);
+                // Initialize visualization vectors using the local 'p' instance.
+                R_math_vis = p.createVector(0,0); 
+                Q_math_vis = p.createVector(0,0); 
+                P_math_vis = p.createVector(0,0);
+                updateVisualPoints(); // Calculate and set initial positions for R, Q, P.
+            };
+            
+            // Updates the global `_vis` variables (R_math_vis, etc.) used for real-time drawing.
+            // Reads current slider values for a, b, theta and recalculates PQR positions.
+            // This function is called from p.draw() and updateParameters().
+            window.updateVisualPoints = () => {
+                if (!p5Instance) { return; } // Ensure p5Instance is ready
+                let a_input = parseFloat(document.getElementById('ellipseANumber').value);
+                let b_input = parseFloat(document.getElementById('ellipseBNumber').value);
+                let thetaDegrees = parseFloat(document.getElementById('thetaSlider').value);
+                
+                if (!R_math_vis || !Q_math_vis || !P_math_vis) { return; } // Ensure vectors are initialized
+                
+                let points = calculatePQRForTheta(thetaDegrees, a_input, b_input, p5Instance);
+                R_math_vis.set(points.R); // Update global visualization vectors
+                Q_math_vis.set(points.Q);
+                P_math_vis.set(points.P);
+
+                L_RQ_vis = Math.abs(a_input - b_input); // Update lengths for info display
+                L_QP_vis = b_input;
+            };
+
+            // p5.js draw() function: Called repeatedly, creating the animation frames.
+            // Clears background, translates origin, draws axes, ellipse, circle, PQR mechanism, and info.
+            p.draw = () => {
+                if (!p5Instance) return; // Ensure p5 is fully initialized
+                updateVisualPoints(); // Recalculate PQR based on current slider values for this frame.
+
+                p.background(245); // Clear canvas with a light gray background
+                currentCanvasWidth = p.width; currentCanvasHeight = p.height; // Update dimensions if resized
+                p.translate(currentCanvasWidth / 2, currentCanvasHeight / 2); // Move origin to canvas center
+
+                // Draw X and Y axes for reference.
+                p.stroke(180); p.strokeWeight(1);
+                p.line(-currentCanvasWidth / 2, 0, currentCanvasWidth / 2, 0); // X-axis
+                p.line(0, -currentCanvasHeight / 2, 0, currentCanvasHeight / 2); // Y-axis
+                p.fill(150); p.noStroke();
+                p.text("X", currentCanvasWidth / 2 - 20, 15);
+                p.text("Y", 10, -currentCanvasHeight / 2 + 20);
+
+                // Get current ellipse parameters for drawing.
+                let a_ellipse_vis = parseFloat(document.getElementById('ellipseANumber').value);
+                let b_ellipse_vis = parseFloat(document.getElementById('ellipseBNumber').value);
+                let theta_current_deg = parseFloat(document.getElementById('thetaSlider').value);
+
+                // Draw the main ellipse.
+                let p5EllipseCenter = mathToP5(p.createVector(0,0), p); // Ellipse center in p5 coords (0,0 after translate)
+                p.stroke(0, 0, 200); p.strokeWeight(2);
+                p.fill(150, 150, 255, 100); // Semi-transparent blue fill
+                p.ellipse(p5EllipseCenter.x, p5EllipseCenter.y, a_ellipse_vis * 2, b_ellipse_vis * 2); // Width=2a, Height=2b
+
+                // Draw the auxiliary circle with radius |a-b|.
+                let circleRadius_vis = Math.abs(a_ellipse_vis - b_ellipse_vis);
+                if (circleRadius_vis > 0.01) { // Only draw if radius is significant
+                    p.stroke(255, 100, 0, 100); p.strokeWeight(1); p.noFill(); // Orange, no fill
+                    p.ellipse(p5EllipseCenter.x, p5EllipseCenter.y, circleRadius_vis * 2, circleRadius_vis * 2);
+                }
+
+                // Convert mathematical coordinates of R, Q, P (for visualization) to p5.js screen coordinates.
+                let R_p5_vis = mathToP5(R_math_vis, p);
+                let Q_p5_vis = mathToP5(Q_math_vis, p);
+                let P_p5_vis = mathToP5(P_math_vis, p);
+
+                // Draw the PQR mechanism: line segments RQ, QP, and points R, Q, P.
+                p.stroke(100,100,100, 200); p.strokeWeight(2); // Gray for RQ
+                p.line(R_p5_vis.x, R_p5_vis.y, Q_p5_vis.x, Q_p5_vis.y);
+                p.stroke(200, 0, 0); p.strokeWeight(2.5); // Red for QP (the main arm)
+                p.line(Q_p5_vis.x, Q_p5_vis.y, P_p5_vis.x, P_p5_vis.y);
+                
+                // Draw arrowhead at P, pointing in the direction of QP.
+                p.push(); // Save current drawing style and transformation state
+                p.translate(P_p5_vis.x, P_p5_vis.y); // Move to P's location
+                let angleQP_p5_vis = p.atan2(P_p5_vis.y - Q_p5_vis.y, P_p5_vis.x - Q_p5_vis.x); // Angle of QP vector
+                p.rotate(angleQP_p5_vis); // Rotate coordinate system to align with QP
+                p.fill(200,0,0); p.noStroke();
+                p.triangle(-10, -5, -10, 5, 0, 0); // Draw triangle arrowhead
+                p.pop(); // Restore previous drawing style and transformation state
+
+                // Draw points R, Q, P as small circles with labels.
+                p.noStroke();
+                p.fill(0, 150, 0); p.ellipse(R_p5_vis.x, R_p5_vis.y, 8, 8); // Green R
+                p.fill(0, 0, 150); p.ellipse(Q_p5_vis.x, Q_p5_vis.y, 8, 8); // Blue Q
+                p.fill(150, 0, 150); p.ellipse(P_p5_vis.x, P_p5_vis.y, 10, 10); // Purple P
+                p.fill(0); p.noStroke(); // Black text for labels
+                p.text(`R(${R_math_vis.x.toFixed(0)},${R_math_vis.y.toFixed(0)})`, R_p5_vis.x + 8, R_p5_vis.y + 4);
+                p.text(`Q(${Q_math_vis.x.toFixed(0)},${Q_math_vis.y.toFixed(0)})`, Q_p5_vis.x + 8, Q_p5_vis.y + 4);
+                p.text(`P(${P_math_vis.x.toFixed(0)},${P_math_vis.y.toFixed(0)})`, P_p5_vis.x + 8, P_p5_vis.y - 5);
+
+                // Update the informational display with current values.
+                let infoHTML = `<b>Ellipse:</b> a=${a_ellipse_vis.toFixed(1)}, b=${b_ellipse_vis.toFixed(1)}<br>`;
+                if (L_RQ_vis !== undefined && L_QP_vis !== undefined) { // Check if lengths are calculated
+                    infoHTML += `<b>Lengths (visual):</b> L<sub>RQ</sub> = ${L_RQ_vis.toFixed(1)}, L<sub>QP</sub> = ${L_QP_vis.toFixed(1)}<br>`;
+                }
+                infoHTML += `<b>Angle θ (visual):</b> ${theta_current_deg}°<br><br>`;
+                infoHTML += `<b>R (visual):</b> (${R_math_vis.x.toFixed(1)}, ${R_math_vis.y.toFixed(1)})<br>`;
+                infoHTML += `<b>Q (visual):</b> (${Q_math_vis.x.toFixed(1)}, ${Q_math_vis.y.toFixed(1)})<br>`;
+                infoHTML += `<b>P (visual):</b> (${P_math_vis.x.toFixed(1)}, ${P_math_vis.y.toFixed(1)})<br>`;
+                document.getElementById('infoDisplay').innerHTML = infoHTML;
+            };
+
+            // p5.js windowResized() function: Called if the browser window is resized.
+            // Adjusts canvas dimensions to fit the new window size.
+            p.windowResized = () => {
+                currentCanvasWidth = canvasContainer.offsetWidth;
+                currentCanvasHeight = canvasContainer.offsetHeight;
+                 if (currentCanvasWidth > 0 && currentCanvasHeight > 0) { // Ensure valid dimensions
+                    p.resizeCanvas(currentCanvasWidth, currentCanvasHeight);
+                }
+            };
+         }; // End of sketch function
+
+        // --- UI Update & Calculation Functions (called by HTML element events) ---
+
+        // Called when any of the main control sliders/inputs (a, b, theta, decimal places) change.
+        // Updates displayed values, global `circumferenceDecimalPlaces`, visualization points, and circumference calculations.
+        function updateParameters() {
+            // Sync slider and number input values for a and b.
+            let aVal = document.getElementById('ellipseANumber').value;
+            let bVal = document.getElementById('ellipseBNumber').value;
+            document.getElementById('ellipseASlider').value = aVal;
+            document.getElementById('ellipseBSlider').value = bVal;
+            // Update text spans showing current a, b, theta values.
+            document.getElementById('ellipseAVal').textContent = parseFloat(aVal).toFixed(0);
+            document.getElementById('ellipseBVal').textContent = parseFloat(bVal).toFixed(0);
+            document.getElementById('thetaSliderVal').textContent = document.getElementById('thetaSlider').value + "°";
+            
+            // Update global variable for decimal places from its input field.
+            circumferenceDecimalPlaces = parseInt(document.getElementById('circumferenceDecimals').value) || 3; // Default to 3 if input is invalid
+
+            if (typeof window.updateVisualPoints === 'function') { // Ensure function exists
+                window.updateVisualPoints(); // Recalculate and redraw PQR mechanism.
+            }
+            calculateAndDisplayEllipseCircumferences(); // Recalculate and display ellipse circumference approximations.
+        }
+        
+        // Calculates and displays ellipse circumference using three approximation formulas.
+        // Uses `Math.max/min` to ensure 'a' is semi-major and 'b' is semi-minor for formulas.
+        // Formats results to `circumferenceDecimalPlaces`.
+        function calculateAndDisplayEllipseCircumferences() {
+            let input_a = parseFloat(document.getElementById('ellipseANumber').value);
+            let input_b = parseFloat(document.getElementById('ellipseBNumber').value);
+
+            // For circumference formulas, 'a' is semi-major axis, 'b' is semi-minor.
+            let a_formula = Math.max(input_a, input_b);
+            let b_formula = Math.min(input_a, input_b);
+            if (a_formula <= 0 || b_formula < 0) { // Validate dimensions
+                 document.getElementById('ellipseCircumferenceResults').innerHTML = "Invalid ellipse dimensions for circumference (a > 0, b >= 0).";
+                 return;
+            }
+
+            let dec = circumferenceDecimalPlaces; // Use the globally set decimal places
+            let resultsHTML = `For semi-major axis=${a_formula.toFixed(1)}, semi-minor axis=${b_formula.toFixed(1)}:<br>`;
+
+            // Formula 1: Simple Approximation
+            let circ1 = Math.PI * (a_formula + b_formula);
+            resultsHTML += `1. Simple (π(a+b)): <b>${circ1.toFixed(dec)}</b><br>`;
+
+            // Formula 2: Ramanujan's First Approximation (more accurate)
+            let circ2_term_under_sqrt = (3 * a_formula + b_formula) * (a_formula + 3 * b_formula);
+            let circ2 = Math.PI * (3 * (a_formula + b_formula) - Math.sqrt(circ2_term_under_sqrt));
+            resultsHTML += `2. Ramanujan 1 (π[3(a+b) - √((3a+b)(a+3b))]): <b>${circ2.toFixed(dec)}</b><br>`;
+            
+            // Formula 3: Ramanujan's Second Approximation (very accurate)
+            if (a_formula + b_formula === 0) { // Avoid division by zero
+                resultsHTML += `3. Ramanujan 2: Undefined (a+b=0)<br>`;
+            } else {
+                let h = Math.pow(a_formula - b_formula, 2) / Math.pow(a_formula + b_formula, 2);
+                let circ3_denom_sqrt_term = 4 - 3 * h;
+                if (circ3_denom_sqrt_term < 0) circ3_denom_sqrt_term = 0; // Prevent sqrt of negative
+                let circ3 = Math.PI * (a_formula + b_formula) * (1 + (3 * h) / (10 + Math.sqrt(circ3_denom_sqrt_term)));
+                resultsHTML += `3. Ramanujan 2 (π(a+b)[1 + 3h/(10+√(4-3h))]): <b>${circ3.toFixed(dec)}</b><br>`;
+            }
+            document.getElementById('ellipseCircumferenceResults').innerHTML = resultsHTML;
+        }
+
+        // Calculates the path length of point P over a specified angular range using numerical integration.
+        // Divides the angular range into `numSteps` and sums the lengths of small line segments.
+        // Uses `calculatePQRForTheta` to find P at each step and p5.js `dist()` for segment length.
+        window.triggerPathLengthCalculation = () => {
+            if (!p5Instance) { alert("P5.js is not initialized yet."); return; } // Check p5 instance
+            // Get input values for path calculation parameters.
+            let startThetaInput = document.getElementById('pathStartTheta').value;
+            let startThetaDeg;
+            if (startThetaInput === "" || isNaN(parseFloat(startThetaInput))) { // Use current slider theta if input is empty/invalid
+                startThetaDeg = parseFloat(document.getElementById('thetaSlider').value);
+            } else {
+                startThetaDeg = parseFloat(startThetaInput);
+            }
+            let angleRangeDeg = parseFloat(document.getElementById('pathAngleRange').value);
+            let numSteps = parseInt(document.getElementById('pathNumSteps').value);
+            // Validate inputs.
+            if (isNaN(angleRangeDeg) || isNaN(numSteps) || numSteps < 1) {
+                document.getElementById('pathResultSummary').innerHTML = "Invalid input for path calculation.";
+                document.getElementById('pathResultDetails').innerHTML = "";
+                return;
+            }
+            // Get current ellipse dimensions.
+            let current_a = parseFloat(document.getElementById('ellipseANumber').value);
+            let current_b = parseFloat(document.getElementById('ellipseBNumber').value);
+            let totalDistance = 0;
+            let thetaStepDeg = angleRangeDeg / numSteps; // Angular step size per iteration
+            
+            // Calculate initial position of P.
+            let P_previous_obj = calculatePQRForTheta(startThetaDeg, current_a, current_b, p5Instance);
+            let P_previous = p5Instance.createVector(P_previous_obj.P.x, P_previous_obj.P.y); // Ensure it's a p5.Vector
+
+            // Prepare HTML strings for displaying results.
+            let pathSummaryHTML = `<b>Summary:</b> Start θ = ${startThetaDeg.toFixed(1)}°, Δθ = ${angleRangeDeg.toFixed(1)}°, Steps = ${numSteps}.<br>`;
+            let pathDetailsHTML = `Calculating path for P:<br>`;
+            let pathLengthDecimals = circumferenceDecimalPlaces; // Use same decimal setting as circumference
+
+            // Loop through each step to calculate segment lengths and sum them.
+            for (let i = 1; i <= numSteps; i++) {
+                let currentThetaDeg = startThetaDeg + i * thetaStepDeg; // Theta for current step
+                let P_current_obj = calculatePQRForTheta(currentThetaDeg, current_a, current_b, p5Instance);
+                let P_current = P_current_obj.P; // P's position at current theta
+                // Calculate distance between P at previous step and P at current step (Pythagoras).
+                let dist = p5Instance.dist(P_previous.x, P_previous.y, P_current.x, P_current.y);
+                totalDistance += dist; // Add segment length to total
+                // Append details of this step to the details HTML string.
+                pathDetailsHTML += `Step ${i}: θ=${currentThetaDeg.toFixed(1)}°, P=(${P_current.x.toFixed(2)}, ${P_current.y.toFixed(2)}), d=${dist.toFixed(3)}<br>`;
+                P_previous.set(P_current.x, P_current.y); // Update P_previous for the next iteration
+            }
+            
+            // Finalize summary HTML with total distance, formatted to specified decimal places.
+            pathSummaryHTML += `<b>Total path length for P: ${totalDistance.toFixed(pathLengthDecimals)}</b>`; 
+            // Display summary and details in their respective HTML elements.
+            document.getElementById('pathResultSummary').innerHTML = pathSummaryHTML;
+            document.getElementById('pathResultDetails').innerHTML = pathDetailsHTML;
+        };
+
+        // --- Initialization ---
+        // This event listener waits for the HTML document to be fully loaded and parsed.
+        // Then, it creates the p5.js sketch instance and calls initial update functions.
+        document.addEventListener('DOMContentLoaded', () => {
+            new p5(sketch); // Create the p5.js sketch, which will set p5Instance.
+            // Use setTimeout to ensure p5Instance is set by `new p5(sketch)` before updateParameters is called.
+            setTimeout(() => { 
+                if (p5Instance) {
+                    updateParameters(); // Initialize displayed values and calculations.
+                } else {
+                    console.error("p5Instance was not set in time after DOMContentLoaded.");
+                }
+            }, 150); // Small delay to allow p5.js to initialize.
+        });
+    </script>
+</body>
+</html>
